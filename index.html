@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waffle Grammar: 3D Retro Pixel Runner & Simple Past Arcade</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Retro Pixel Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Three.js for 3D Graphics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <style>
+        :root {
+            --pixel-bg: #1e1333;
+            --pixel-card: #2f1947;
+            --pixel-amber: #ffb703;
+            --pixel-pink: #ff85a1;
+            --pixel-yellow: #ffee55;
+            --pixel-mint: #70e4b8;
+            --pixel-purple: #4a2870;
+            --pixel-dark: #120924;
+        }
+
+        body {
+            font-family: 'Silkscreen', monospace;
+            background-color: var(--pixel-bg);
+            background-image: 
+                radial-gradient(#4a2870 2px, transparent 2px),
+                linear-gradient(to bottom, rgba(18, 9, 36, 0.85), rgba(30, 19, 51, 0.98));
+            background-size: 16px 16px, 100% 100%;
+            color: #ffffff;
+            image-rendering: pixelated;
+        }
+
+        .font-pixel-heading {
+            font-family: 'Press Start 2P', cursive;
+            line-height: 1.4;
+        }
+
+        /* Retro 8-Bit Pixel Borders & Shadows */
+        .pixel-border {
+            border: 4px solid #000;
+            box-shadow: 
+                inset -4px -4px 0px 0px rgba(0,0,0,0.5),
+                inset 4px 4px 0px 0px rgba(255,255,255,0.25),
+                6px 6px 0px 0px #000;
+        }
+
+        .pixel-box-amber {
+            background-color: var(--pixel-card);
+            border: 4px solid var(--pixel-amber);
+            box-shadow: 6px 6px 0px 0px #000;
+        }
+
+        .pixel-box-pink {
+            background-color: #3b1942;
+            border: 4px solid var(--pixel-pink);
+            box-shadow: 6px 6px 0px 0px #000;
+        }
+
+        .pixel-btn {
+            border: 3px solid #000;
+            box-shadow: 4px 4px 0px 0px #000;
+            transition: transform 0.05s, box-shadow 0.05s;
+        }
+
+        .pixel-btn:active:not(:disabled) {
+            transform: translate(3px, 3px);
+            box-shadow: 1px 1px 0px 0px #000;
+        }
+
+        /* Scanline Overlay for CRT Arcade Feel */
+        .crt-scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%);
+            background-size: 100% 4px;
+            z-index: 25;
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        @keyframes pixel-float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+        .animate-pixel-float {
+            animation: pixel-float 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes pixel-shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+        .animate-pixel-shake {
+            animation: pixel-shake 0.3s steps(3, end);
+        }
+
+        @keyframes pixel-pop {
+            0% { transform: scale(0.85); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pixel-pop {
+            animation: pixel-pop 0.2s steps(3, end) forwards;
+        }
+
+        /* Custom Kawaii Avatar Selection Card Effects */
+        .avatar-card.selected {
+            border-color: #ffee55 !important;
+            background-color: #5c2f82 !important;
+            box-shadow: 0 0 15px #ffee55, 6px 6px 0px 0px #000;
+            transform: translateY(-4px);
+        }
+
+        #runner-canvas-container canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-amber-100 flex flex-col justify-between selection:bg-pink-500 selection:text-black crt-scanlines relative overflow-x-hidden">
+
+    <!-- Top Retro Bar Navigation -->
+    <header class="bg-amber-500 border-b-4 border-black p-2.5 md:p-3 sticky top-0 z-30 shadow-[0_6px_0_0_#000]">
+        <div class="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div class="flex items-center space-x-3">
+                <span id="header-avatar-emoji" class="text-3xl animate-pixel-float">🐱</span>
+                <div>
+                    <h1 class="font-pixel-heading text-xs md:text-sm font-bold text-black tracking-wide">3D WAFFLE RUNNER & GRAMMAR</h1>
+                    <p class="text-[9px] md:text-[10px] text-amber-950 font-bold tracking-wider uppercase">Ground POV Arcade Edition</p>
+                </div>
+            </div>
+
+            <!-- Arcade Stats Display -->
+            <div class="flex items-center space-x-2 sm:space-x-3 flex-wrap justify-center">
+                <!-- Participant Badge -->
+                <div id="player-tag" class="bg-amber-950 border-2 border-black px-2 py-1 flex items-center space-x-1 text-[10px] font-bold text-yellow-300">
+                    <i class="fa-solid fa-gamepad text-pink-400"></i>
+                    <span id="header-player-name">P1: CHEF</span>
+                </div>
+
+                <!-- Rules Button -->
+                <button onclick="toggleRuleModal(true)" class="bg-purple-800 hover:bg-purple-700 text-yellow-300 text-[10px] font-bold px-2 py-1 border-2 border-black pixel-btn flex items-center space-x-1">
+                    <i class="fa-solid fa-book-open"></i>
+                    <span>RULES</span>
+                </button>
+
+                <!-- Share Button -->
+                <button onclick="copyShareLink()" class="bg-pink-700 hover:bg-pink-600 text-white text-[10px] font-bold px-2 py-1 border-2 border-black pixel-btn flex items-center space-x-1">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    <span id="share-btn-text">SHARE</span>
+                </button>
+
+                <!-- Energy / Waffle Counter -->
+                <div class="bg-amber-950 border-2 border-black px-2 py-1 flex items-center space-x-1.5">
+                    <span class="text-sm">🧇</span>
+                    <div class="flex flex-col">
+                        <span class="text-[8px] uppercase font-bold text-amber-400 tracking-widest leading-none">ENERGY</span>
+                        <span id="waffle-count" class="font-pixel-heading text-xs text-yellow-300 leading-none mt-0.5">1000 / 1000</span>
+                    </div>
+                </div>
+
+                <!-- Correct Streak for Runner Unlock -->
+                <div class="bg-amber-950 border-2 border-black px-2 py-1 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-bolt text-pink-400 text-xs"></i>
+                    <div class="flex flex-col">
+                        <span class="text-[8px] uppercase font-bold text-pink-300 tracking-widest leading-none">STREAK</span>
+                        <span id="streak-count" class="font-pixel-heading text-xs text-pink-300 leading-none mt-0.5">0 / 3</span>
+                    </div>
+                </div>
+
+                <!-- Score Counter -->
+                <div class="bg-amber-950 border-2 border-black px-2 py-1 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-trophy text-yellow-400 text-xs"></i>
+                    <div class="flex flex-col">
+                        <span class="text-[8px] uppercase font-bold text-amber-400 tracking-widest leading-none">SCORE</span>
+                        <span id="score-count" class="font-pixel-heading text-xs text-white leading-none mt-0.5">0000</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-3xl w-full mx-auto p-3 md:p-4 flex-grow flex flex-col justify-center my-2 relative z-10">
+
+        <!-- 1. AVATAR SELECTION & PLAYER NAME SCREEN -->
+        <div id="avatar-screen" class="pixel-box-pink p-5 md:p-7 text-center animate-pixel-pop relative">
+            <div class="text-4xl mb-2 animate-pixel-float">🐱🐰🐻</div>
+            <h2 class="font-pixel-heading text-base md:text-xl text-yellow-300 mb-2">SELECT YOUR 3D KAWAII HERO!</h2>
+            <p class="text-pink-200 text-xs mb-5 leading-relaxed max-w-md mx-auto">
+                Answer 3 grammar questions correctly to power up your hero and escape in 3D ground view from the Pixel Police 🚓💨!
+            </p>
+
+            <!-- Participant Name Input -->
+            <div class="max-w-xs mx-auto mb-5 text-left bg-purple-950/90 p-3 border-2 border-pink-400 shadow-[4px_4px_0px_0px_#000]">
+                <label for="participant-name-input" class="block text-[10px] font-pixel-heading text-pink-300 mb-1.5 text-center uppercase tracking-wider">
+                    <i class="fa-solid fa-user-astronaut mr-1"></i> Player Name
+                </label>
+                <input type="text" id="participant-name-input" placeholder="ENTER NAME..." maxlength="12" value="CHEF"
+                       class="w-full px-3 py-2 border-2 border-black font-pixel-heading text-xs text-center text-yellow-300 bg-black focus:outline-none focus:border-pink-400 uppercase tracking-widest">
+            </div>
+
+            <!-- Avatar Selection Grid -->
+            <div class="grid grid-cols-3 gap-3 max-w-md mx-auto mb-6">
+                <!-- Avatar 1 -->
+                <div id="avatar-card-cat" onclick="selectAvatar('cat')" class="avatar-card selected bg-purple-900 p-3 border-2 border-pink-400 cursor-pointer pixel-btn text-center">
+                    <div class="text-3xl mb-1">🐱</div>
+                    <div class="font-pixel-heading text-[10px] text-yellow-300">WAFFLE CAT</div>
+                    <div class="text-[8px] text-pink-200 mt-1">Super Speedy!</div>
+                </div>
+                <!-- Avatar 2 -->
+                <div id="avatar-card-bunny" onclick="selectAvatar('bunny')" class="avatar-card bg-purple-900 p-3 border-2 border-pink-400 cursor-pointer pixel-btn text-center">
+                    <div class="text-3xl mb-1">🐰</div>
+                    <div class="font-pixel-heading text-[10px] text-yellow-300">SYRUP BUNNY</div>
+                    <div class="text-[8px] text-pink-200 mt-1">High Jumper!</div>
+                </div>
+                <!-- Avatar 3 -->
+                <div id="avatar-card-bear" onclick="selectAvatar('bear')" class="avatar-card bg-purple-900 p-3 border-2 border-pink-400 cursor-pointer pixel-btn text-center">
+                    <div class="text-3xl mb-1">🐻</div>
+                    <div class="font-pixel-heading text-[10px] text-yellow-300">PANCAKE BEAR</div>
+                    <div class="text-[8px] text-pink-200 mt-1">Extra Tough!</div>
+                </div>
+            </div>
+
+            <button onclick="confirmAvatarAndStart()" class="w-full sm:w-auto bg-yellow-400 hover:bg-yellow-300 text-black font-pixel-heading text-xs px-8 py-3.5 pixel-btn font-bold transition">
+                <i class="fa-solid fa-play mr-2"></i> ENTER GRAMMAR HUB 🧇
+            </button>
+        </div>
+
+        <!-- 2. GRAMMAR QUESTION HUB SCREEN -->
+        <div id="game-screen" class="hidden pixel-box-amber p-5 md:p-7 relative">
+            
+            <!-- Progress Bar & Streak Indicator -->
+            <div class="mb-5">
+                <div class="flex justify-between items-center text-[10px] font-bold text-amber-300 mb-1.5">
+                    <span id="level-title" class="font-pixel-heading text-[10px]">QUESTION 1 / 15</span>
+                    <span id="task-type-badge" class="bg-purple-900 border border-amber-400 text-yellow-300 px-2 py-0.5 font-pixel-heading text-[8px] uppercase">ERROR SPOTTER</span>
+                </div>
+                <div class="w-full bg-black border-2 border-amber-400 h-3.5 p-0.5">
+                    <div id="progress-bar" class="bg-amber-400 h-full transition-all duration-300" style="width: 10%"></div>
+                </div>
+            </div>
+
+            <!-- Dynamic Question Area -->
+            <div id="question-area" class="min-h-[240px] flex flex-col justify-center">
+                <!-- Content generated dynamically via JS -->
+            </div>
+
+            <!-- Retro Feedback Modal Banner -->
+            <div id="feedback-banner" class="hidden border-4 border-black p-3.5 mt-5 flex items-start space-x-3 transition animate-pixel-pop">
+                <div id="feedback-icon" class="text-2xl mt-0.5"></div>
+                <div class="flex-grow">
+                    <h4 id="feedback-title" class="font-pixel-heading text-xs font-bold"></h4>
+                    <p id="feedback-text" class="text-xs mt-1.5 leading-relaxed"></p>
+                </div>
+                <button id="next-btn" onclick="nextQuestion()" class="bg-amber-400 hover:bg-yellow-300 text-black font-pixel-heading text-[10px] px-3 py-2 border-2 border-black pixel-btn self-center whitespace-nowrap">
+                    NEXT <i class="fa-solid fa-forward ml-1"></i>
+                </button>
+            </div>
+
+            <!-- Ready To Run Banner Prompt -->
+            <div id="runner-ready-banner" class="hidden mt-4 p-4 bg-pink-900 border-4 border-pink-400 text-center animate-pixel-pop">
+                <div class="text-2xl mb-1">🚓💨 🚨 🧇</div>
+                <h3 class="font-pixel-heading text-xs text-yellow-300">3D RUNNER ENERGY READY! (3/3 STREAK)</h3>
+                <p class="text-[10px] text-pink-200 mt-1 mb-3">You earned enough energy to escape the Pixel Police!</p>
+                <button onclick="launchRunnerGame()" class="bg-yellow-400 hover:bg-yellow-300 text-black font-pixel-heading text-xs px-6 py-2.5 border-2 border-black pixel-btn">
+                    <i class="fa-solid fa-person-running mr-1"></i> LAUNCH 3D RUNNER!
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. RETRO SUBWAY SURFERS 3D RUNNER SCREEN -->
+        <div id="runner-screen" class="hidden pixel-box-pink p-4 md:p-5 relative flex flex-col items-center">
+            
+            <!-- Runner HUD -->
+            <div class="w-full flex justify-between items-center mb-2 px-1 text-[10px] font-pixel-heading text-yellow-300">
+                <div class="flex items-center space-x-2">
+                    <span>POLICE DISTANCE:</span>
+                    <span id="police-dist-indicator" class="text-pink-400">100m</span>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <span>ENERGY:</span>
+                    <span id="runner-energy-num" class="text-yellow-300">1000 / 1000</span>
+                </div>
+            </div>
+
+            <!-- 3D Three.js Canvas Container -->
+            <div id="runner-canvas-container" class="relative w-full max-w-lg aspect-[4/3] bg-black border-4 border-black overflow-hidden shadow-[6px_6px_0px_0px_#000]">
+                <!-- Three.js renders inside here -->
+                
+                <!-- Busted / Energy Depleted Overlay -->
+                <div id="runner-overlay" class="absolute inset-0 bg-black/85 hidden flex flex-col items-center justify-center p-4 text-center animate-pixel-pop z-20">
+                    <div id="runner-overlay-icon" class="text-5xl mb-2">🚨</div>
+                    <h3 id="runner-overlay-title" class="font-pixel-heading text-sm text-pink-400 mb-1">OUT OF ENERGY!</h3>
+                    <p id="runner-overlay-desc" class="text-xs text-amber-200 mb-4 max-w-xs">The Pixel Police caught up! Answer questions in the Grammar Hub to refuel your avatar!</p>
+                    <button onclick="returnToGrammarHub()" class="bg-amber-400 hover:bg-yellow-300 text-black font-pixel-heading text-xs px-6 py-2.5 border-2 border-black pixel-btn">
+                        <i class="fa-solid fa-brain mr-1"></i> BACK TO GRAMMAR HUB
+                    </button>
+                </div>
+            </div>
+
+            <!-- Arcade Controls for Touch / On-screen play -->
+            <div class="mt-3 w-full max-w-lg flex flex-col items-center gap-2">
+                <div class="text-[9px] font-pixel-heading text-pink-300 text-center">
+                    3D CONTROLS: ARROWS / WASD or BUTTONS BELOW
+                </div>
+                <div class="flex justify-center items-center gap-2">
+                    <button onmousedown="handleRunnerInput('left')" touchstart="handleRunnerInput('left')" class="bg-purple-800 active:bg-purple-600 text-yellow-300 text-xs px-4 py-3 border-2 border-black pixel-btn">
+                        <i class="fa-solid fa-arrow-left"></i> LEFT
+                    </button>
+                    <button onmousedown="handleRunnerInput('jump')" touchstart="handleRunnerInput('jump')" class="bg-pink-600 active:bg-pink-500 text-white text-xs px-4 py-3 border-2 border-black pixel-btn">
+                        <i class="fa-solid fa-arrow-up"></i> JUMP
+                    </button>
+                    <button onmousedown="handleRunnerInput('duck')" touchstart="handleRunnerInput('duck')" class="bg-pink-600 active:bg-pink-500 text-white text-xs px-4 py-3 border-2 border-black pixel-btn">
+                        <i class="fa-solid fa-arrow-down"></i> DUCK
+                    </button>
+                    <button onmousedown="handleRunnerInput('right')" touchstart="handleRunnerInput('right')" class="bg-purple-800 active:bg-purple-600 text-yellow-300 text-xs px-4 py-3 border-2 border-black pixel-btn">
+                        RIGHT <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. END GAME / SUMMARY SCREEN -->
+        <div id="end-screen" class="hidden pixel-box-amber p-6 md:p-8 text-center animate-pixel-pop">
+            <div id="trophy-icon" class="text-6xl mb-3 animate-pixel-float">🏆</div>
+            <h2 id="end-title" class="font-pixel-heading text-base md:text-xl text-yellow-300 mb-2">STAGE CLEAR!</h2>
+            <p id="end-subtitle" class="text-amber-200 text-xs mb-6">You are now an expert on Simple Past Time Expressions!</p>
+
+            <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto mb-6">
+                <div class="bg-black/70 p-3 border-2 border-amber-400">
+                    <div class="text-[9px] text-amber-400 font-pixel-heading uppercase mb-1">FINAL SCORE</div>
+                    <div id="final-score" class="font-pixel-heading text-xl text-yellow-300">0000</div>
+                </div>
+                <div class="bg-black/70 p-3 border-2 border-amber-400">
+                    <div class="text-[9px] text-amber-400 font-pixel-heading uppercase mb-1">ENERGY LEFT</div>
+                    <div id="final-waffles" class="font-pixel-heading text-xl text-yellow-300">0</div>
+                </div>
+            </div>
+
+            <!-- Grammar Summary Cheat Sheet Memory Cards -->
+            <div class="text-left bg-black/80 p-4 border-2 border-amber-400 mb-6 text-xs text-amber-200 space-y-2">
+                <p class="font-pixel-heading text-yellow-300 text-[10px] border-b border-amber-500 pb-2">💡 RETRO GRAMMAR SUMMARY:</p>
+                <p class="mt-2">✅ <strong>No Prepositions:</strong> Never put <em>in, on, at</em> before <em>yesterday</em> or <em>last</em>.</p>
+                <p>✅ <strong>AGO Position:</strong> Time duration FIRST, then <em>ago</em> (e.g. "3 hours ago").</p>
+                <p>✅ <strong>Exact Past Time:</strong> Use Simple Past verb (e.g. "I saw"), not Present Perfect.</p>
+                <p>✅ <strong>Questions & Negatives:</strong> Use base verb after <em>did/didn't</em>.</p>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-3">
+                <button onclick="resetToStart()" class="bg-amber-500 hover:bg-yellow-400 text-black font-pixel-heading text-xs px-6 py-3 border-2 border-black pixel-btn transition">
+                    <i class="fa-solid fa-rotate-right mr-2"></i> REPLAY GAME
+                </button>
+                <button onclick="copyShareLink()" class="bg-pink-600 hover:bg-pink-500 text-white font-pixel-heading text-xs px-6 py-3 border-2 border-black pixel-btn transition">
+                    <i class="fa-solid fa-share-nodes mr-2"></i> SHARE GAME LINK
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- GRAMMAR RULE MODAL -->
+    <div id="rule-modal" class="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-purple-950 border-4 border-amber-400 max-w-xl w-full p-6 max-h-[85vh] overflow-y-auto shadow-[8px_8px_0px_0px_#000] animate-pixel-pop">
+            <div class="flex justify-between items-center border-b-2 border-amber-500 pb-3 mb-4">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl">📖</span>
+                    <h3 class="font-pixel-heading text-xs md:text-sm text-yellow-300">GRAMMAR CHEAT SHEET</h3>
+                </div>
+                <button onclick="toggleRuleModal(false)" class="text-amber-400 hover:text-yellow-300 text-lg font-bold p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs text-amber-100">
+                <!-- Rule 1 -->
+                <div class="bg-black/60 p-3 border-2 border-amber-500">
+                    <h4 class="font-pixel-heading text-[10px] text-yellow-300">1. PREPOSITION PROHIBITION 🚫</h4>
+                    <p class="mt-1">Do NOT use <em>in, on, at</em> directly before <strong>yesterday</strong> or <strong>last</strong>.</p>
+                    <div class="mt-2 font-mono text-[11px] bg-purple-900/60 p-2 border border-purple-700">
+                        <span class="text-red-400">❌ in last night / on yesterday</span><br>
+                        <span class="text-green-400 font-bold">✅ last night / yesterday</span>
+                    </div>
+                </div>
+
+                <!-- Rule 2 -->
+                <div class="bg-black/60 p-3 border-2 border-amber-500">
+                    <h4 class="font-pixel-heading text-[10px] text-yellow-300">2. "AGO" WORD ORDER ⏳</h4>
+                    <p class="mt-1"><em>Ago</em> ALWAYS comes <strong>after</strong> the time duration.</p>
+                    <div class="mt-2 font-mono text-[11px] bg-purple-900/60 p-2 border border-purple-700">
+                        <span class="text-red-400">❌ ago two hours / before two hours</span><br>
+                        <span class="text-green-400 font-bold">✅ two hours ago</span>
+                    </div>
+                </div>
+
+                <!-- Rule 3 -->
+                <div class="bg-black/60 p-3 border-2 border-amber-500">
+                    <h4 class="font-pixel-heading text-[10px] text-yellow-300">3. SPECIFIC PAST TIME 🎯</h4>
+                    <p class="mt-1">When specifying exact past time (yesterday, in 2018, 5 hours ago), use Simple Past tense, NOT Present Perfect.</p>
+                    <div class="mt-2 font-mono text-[11px] bg-purple-900/60 p-2 border border-purple-700">
+                        <span class="text-red-400">❌ I have seen him yesterday.</span><br>
+                        <span class="text-green-400 font-bold">✅ I saw him yesterday.</span>
+                    </div>
+                </div>
+
+                <!-- Rule 4 -->
+                <div class="bg-black/60 p-3 border-2 border-amber-500">
+                    <h4 class="font-pixel-heading text-[10px] text-yellow-300">4. PREPOSITIONS WITH DATES 📅</h4>
+                    <p class="mt-1">Use <strong>IN</strong> for years/months, <strong>ON</strong> for days/dates, <strong>AT</strong> for exact clock times.</p>
+                    <div class="mt-2 font-mono text-[11px] bg-purple-900/60 p-2 border border-purple-700">
+                        <span class="text-green-400 font-bold">✅ in 2020 | on Monday | at 8:00 PM</span>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="toggleRuleModal(false)" class="w-full mt-5 bg-amber-500 hover:bg-yellow-400 text-black font-pixel-heading text-xs py-2.5 border-2 border-black pixel-btn">
+                CLOSE & CONTINUE 🧇
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center py-3 text-[9px] font-pixel-heading text-amber-400 tracking-wider">
+        WAFFLE GRAMMAR ARCADE &bull; ESCAPE THE PIXEL POLICE IN 3D GROUND POV!
+    </footer>
+
+    <!-- Retro Toast Notification for Share Link -->
+    <div id="toast-notification" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-amber-400 text-black border-4 border-black px-4 py-2 font-pixel-heading text-xs shadow-[4px_4px_0px_0px_#000] z-50 transition-all duration-300 transform translate-y-20 opacity-0 pointer-events-none flex items-center space-x-2">
+        <i class="fa-solid fa-link text-pink-700"></i>
+        <span id="toast-message">LINK COPIED TO CLIPBOARD!</span>
+    </div>
+
+    <script>
+        // Web Audio API Synthesizer for 8-bit Retro Chiptune Sound FX
+        const AudioFX = {
+            ctx: null,
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            },
+            playCorrect() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.setValueAtTime(554.37, now + 0.08);
+                osc.frequency.setValueAtTime(659.25, now + 0.16);
+                osc.frequency.setValueAtTime(880, now + 0.24);
+
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            },
+            playWrong() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            },
+            playWaffle() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                
+                osc.frequency.setValueAtTime(987.77, now);
+                osc.frequency.setValueAtTime(1318.51, now + 0.08);
+
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            },
+            playJump() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(250, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
+
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            },
+            playSiren() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.linearRampToValueAtTime(900, now + 0.2);
+                osc.frequency.linearRampToValueAtTime(600, now + 0.4);
+
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        };
+
+        const ALL_QUESTIONS = [
+            // TRUE OR FALSE QUESTIONS
+            {
+                type: 'truefalse',
+                badge: 'TRUE OR FALSE',
+                statement: 'We say "I went to London on last summer."',
+                isTrue: false,
+                explanation: 'FALSE! Do not use "on" before "last summer". Just say "last summer".'
+            },
+            {
+                type: 'truefalse',
+                badge: 'TRUE OR FALSE',
+                statement: 'The phrase "She called me two days ago" is grammatically correct.',
+                isTrue: true,
+                explanation: 'TRUE! "Ago" correctly follows the time duration (two days + ago).'
+            },
+            {
+                type: 'truefalse',
+                badge: 'TRUE OR FALSE',
+                statement: 'It is correct to say "We saw a movie in yesterday."',
+                isTrue: false,
+                explanation: 'FALSE! Never put "in" or "on" right before "yesterday".'
+            },
+            {
+                type: 'truefalse',
+                badge: 'TRUE OR FALSE',
+                statement: '"They moved to Spain in 2015" uses the correct preposition for years.',
+                isTrue: true,
+                explanation: 'TRUE! Use "in" for years, centuries, and months.'
+            },
+            {
+                type: 'truefalse',
+                badge: 'TRUE OR FALSE',
+                statement: 'The question "Did you went to school yesterday?" is correct.',
+                isTrue: false,
+                explanation: 'FALSE! In Simple Past questions with "Did", use the base verb "go" ("Did you go...?").'
+            },
+            {
+                type: 'truefalse',
+                badge: 'TRUE OR FALSE',
+                statement: '"I was born on July 4th" uses the correct preposition for exact dates.',
+                isTrue: true,
+                explanation: 'TRUE! Use "on" for specific dates and days of the week.'
+            },
+            {
+                type: 'truefalse',
+                badge: 'TRUE OR FALSE',
+                statement: 'We say "He left before 10 minutes" to mean 10 minutes past.',
+                isTrue: false,
+                explanation: 'FALSE! When measuring time backwards from now, say "10 minutes ago".'
+            },
+
+            // MISTAKE SPOTTERS
+            {
+                type: 'spotter',
+                badge: 'ERROR SPOTTER',
+                instruction: 'Tap the GLITCH word in this sentence:',
+                sentenceWords: ['We', 'went', 'to', 'the', 'zoo', 'on yesterday.'],
+                wrongIndex: 5,
+                correctReplacement: 'yesterday',
+                explanation: 'Never use prepositions like "on" or "in" right before "yesterday"!'
+            },
+            {
+                type: 'spotter',
+                badge: 'ERROR SPOTTER',
+                instruction: 'Tap the GLITCH word in this sentence:',
+                sentenceWords: ['She', 'left', 'the', 'office', 'ago two hours.'],
+                wrongIndex: 4,
+                correctReplacement: 'two hours ago',
+                explanation: '"Ago" must ALWAYS go AFTER the duration of time (e.g. "two hours ago").'
+            },
+            {
+                type: 'spotter',
+                badge: 'ERROR SPOTTER',
+                instruction: 'Tap the GLITCH word in this sentence:',
+                sentenceWords: ['I', 'have seen', 'that', 'movie', 'last night.'],
+                wrongIndex: 1,
+                correctReplacement: 'saw',
+                explanation: 'Because "last night" specifies a completed past time, use Simple Past ("saw"), not Present Perfect.'
+            },
+            {
+                type: 'spotter',
+                badge: 'ERROR SPOTTER',
+                instruction: 'Tap the GLITCH word in this sentence:',
+                sentenceWords: ['Did', 'you', 'went', 'to', 'work', 'yesterday?'],
+                wrongIndex: 2,
+                correctReplacement: 'go',
+                explanation: 'In Simple Past questions with "Did", use the base form of the verb ("go", not "went").'
+            },
+            {
+                type: 'spotter',
+                badge: 'ERROR SPOTTER',
+                instruction: 'Tap the GLITCH word in this sentence:',
+                sentenceWords: ['They', 'moved', 'to', 'Canada', 'in last year.'],
+                wrongIndex: 4,
+                correctReplacement: 'last year',
+                explanation: 'Do not put prepositions ("in", "on") before "last year" or "last week".'
+            },
+            {
+                type: 'spotter',
+                badge: 'ERROR SPOTTER',
+                instruction: 'Tap the GLITCH word in this sentence:',
+                sentenceWords: ['He', 'bought', 'a', 'car', 'before three months.'],
+                wrongIndex: 4,
+                correctReplacement: 'three months ago',
+                explanation: 'Use "three months ago" when counting back from the present, not "before three months".'
+            },
+
+            // SENTENCE BUILDERS
+            {
+                type: 'builder',
+                badge: 'COMBO BUILDER',
+                instruction: 'Tap the word blocks in order to build a valid sentence:',
+                scrambled: ['three', 'moved', 'I', 'years', 'ago.', 'here'],
+                targetSentence: 'I moved here three years ago.',
+                explanation: 'Correct order: Subject + Verb + Place + Time duration + ago.'
+            },
+            {
+                type: 'builder',
+                badge: 'COMBO BUILDER',
+                instruction: 'Tap the word blocks in order to build a valid sentence:',
+                scrambled: ['call', 'you', 'Did', 'me', 'night?', 'last'],
+                targetSentence: 'Did you call me last night?',
+                explanation: 'Correct order: Did + subject + base verb + object + last night?'
+            },
+            {
+                type: 'builder',
+                badge: 'COMBO BUILDER',
+                instruction: 'Tap the word blocks in order to build a valid sentence:',
+                scrambled: ['finished', 'They', 'yesterday.', 'their', 'project'],
+                targetSentence: 'They finished their project yesterday.',
+                explanation: 'Place "yesterday" at the end of the sentence.'
+            },
+
+            // RAPID TRIAGE (SPEED SORTERS)
+            {
+                type: 'sorter',
+                badge: 'RAPID TRIAGE',
+                expression: 'on last Monday',
+                isValid: false,
+                explanation: 'GLITCH! Do not put "on" before "last Monday". Just say "last Monday".'
+            },
+            {
+                type: 'sorter',
+                badge: 'RAPID TRIAGE',
+                expression: 'five minutes ago',
+                isValid: true,
+                explanation: 'VALID! "Ago" correctly follows the time duration.'
+            },
+            {
+                type: 'sorter',
+                badge: 'RAPID TRIAGE',
+                expression: 'in 2018',
+                isValid: true,
+                explanation: 'VALID! Use preposition "in" for specific years.'
+            },
+
+            // PRECISION BLANKS
+            {
+                type: 'blank',
+                badge: 'PRECISION BLANK',
+                sentence: 'My brother graduated from university ____ 2021.',
+                options: ['in', 'on', 'ago', 'last'],
+                correct: 'in',
+                explanation: 'Use "in" for years, centuries, and months.'
+            },
+            {
+                type: 'blank',
+                badge: 'PRECISION BLANK',
+                sentence: 'We bought our new car three months ____.',
+                options: ['before', 'ago', 'last', 'past'],
+                correct: 'ago',
+                explanation: 'Use "ago" to indicate time elapsed from the present.'
+            },
+            {
+                type: 'blank',
+                badge: 'PRECISION BLANK',
+                sentence: 'The concert started ____ 8:00 PM.',
+                options: ['at', 'in', 'on', 'ago'],
+                correct: 'at',
+                explanation: 'Use "at" for specific clock times.'
+            }
+        ];
+
+        let activeQueue = [];
+        let currentIndex = 0;
+        const MAX_WAFFLES = 1000;
+        let waffles = 1000; // Starts at 1,000 energy!
+        let streakCount = 0;
+        let score = 0;
+        let selectedChips = [];
+        let isAnswered = false;
+        let playerName = 'CHEF';
+        let selectedAvatar = 'cat';
+
+        const AVATARS = {
+            cat: { emoji: '🐱', name: 'WAFFLE CAT', color: 0xffa500, earColor: 0xff69b4 },
+            bunny: { emoji: '🐰', name: 'SYRUP BUNNY', color: 0xffc0cb, earColor: 0xff1493 },
+            bear: { emoji: '🐻', name: 'PANCAKE BEAR', color: 0x8b4513, earColor: 0xd2691e }
+        };
+
+        function selectAvatar(type) {
+            AudioFX.playWaffle();
+            selectedAvatar = type;
+            document.querySelectorAll('.avatar-card').forEach(card => card.classList.remove('selected'));
+            document.getElementById(`avatar-card-${type}`).classList.add('selected');
+        }
+
+        function toggleRuleModal(show) {
+            AudioFX.playWaffle();
+            document.getElementById('rule-modal').classList.toggle('hidden', !show);
+        }
+
+        function copyShareLink() {
+            AudioFX.playWaffle();
+            const shareUrl = window.location.href;
+
+            // Fallback for iFrame clipboard restrictions
+            const tempInput = document.createElement('textarea');
+            tempInput.value = shareUrl;
+            tempInput.style.position = 'fixed';
+            tempInput.style.left = '-9999px';
+            tempInput.style.top = '-9999px';
+            document.body.appendChild(tempInput);
+            tempInput.select();
+
+            try {
+                document.execCommand('copy');
+                showToast('📋 LINK COPIED TO CLIPBOARD!');
+                const shareText = document.getElementById('share-btn-text');
+                if (shareText) {
+                    shareText.innerText = 'COPIED!';
+                    setTimeout(() => { shareText.innerText = 'SHARE'; }, 2000);
+                }
+            } catch (err) {
+                showToast('⚠️ COULD NOT COPY LINK');
+            } finally {
+                document.body.removeChild(tempInput);
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast-notification');
+            const toastMsg = document.getElementById('toast-message');
+            if (!toast || !toastMsg) return;
+
+            toastMsg.innerText = message;
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 2500);
+        }
+
+        function resetToStart() {
+            AudioFX.playWaffle();
+            document.getElementById('avatar-screen').classList.remove('hidden');
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('runner-screen').classList.add('hidden');
+            document.getElementById('end-screen').classList.add('hidden');
+            waffles = MAX_WAFFLES;
+            streakCount = 0;
+            score = 0;
+            updateHeaderUI();
+        }
+
+        function updateHeaderUI() {
+            document.getElementById('waffle-count').innerText = `${Math.floor(waffles)} / ${MAX_WAFFLES}`;
+            document.getElementById('streak-count').innerText = `${streakCount} / 3`;
+            document.getElementById('score-count').innerText = score.toString().padStart(4, '0');
+            document.getElementById('header-avatar-emoji').innerText = AVATARS[selectedAvatar].emoji;
+        }
+
+        function confirmAvatarAndStart() {
+            AudioFX.playWaffle();
+            const inputVal = document.getElementById('participant-name-input').value.trim();
+            playerName = inputVal !== '' ? inputVal.toUpperCase() : 'CHEF';
+            
+            document.getElementById('header-player-name').innerText = `P1: ${playerName}`;
+            document.getElementById('avatar-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+
+            activeQueue = [...ALL_QUESTIONS].sort(() => 0.5 - Math.random());
+            currentIndex = 0;
+            waffles = MAX_WAFFLES;
+            streakCount = 0;
+            score = 0;
+            updateHeaderUI();
+
+            renderCurrentQuestion();
+        }
+
+        function renderCurrentQuestion() {
+            isAnswered = false;
+            document.getElementById('feedback-banner').classList.add('hidden');
+            
+            if (streakCount >= 3) {
+                document.getElementById('runner-ready-banner').classList.remove('hidden');
+            } else {
+                document.getElementById('runner-ready-banner').classList.add('hidden');
+            }
+
+            const q = activeQueue[currentIndex];
+            const qArea = document.getElementById('question-area');
+            
+            document.getElementById('level-title').innerText = `QUESTION ${currentIndex + 1} / ${activeQueue.length}`;
+            document.getElementById('task-type-badge').innerText = q.badge;
+            const pct = ((currentIndex + 1) / activeQueue.length) * 100;
+            document.getElementById('progress-bar').style.width = `${pct}%`;
+
+            qArea.innerHTML = '';
+
+            if (q.type === 'spotter') {
+                renderSpotter(q, qArea);
+            } else if (q.type === 'builder') {
+                renderBuilder(q, qArea);
+            } else if (q.type === 'sorter') {
+                renderSorter(q, qArea);
+            } else if (q.type === 'blank') {
+                renderBlank(q, qArea);
+            } else if (q.type === 'truefalse') {
+                renderTrueFalse(q, qArea);
+            }
+        }
+
+        function renderTrueFalse(q, container) {
+            let html = `
+                <div class="text-center animate-pixel-pop">
+                    <p class="text-[10px] font-pixel-heading text-yellow-300 uppercase mb-2"><i class="fa-solid fa-scale-balanced mr-1"></i> ${q.badge}</p>
+                    <p class="text-xs text-amber-200 mb-3">Is this grammar rule or statement True or False?</p>
+                    
+                    <div class="my-5 p-5 bg-black border-4 border-amber-400 max-w-md mx-auto shadow-[4px_4px_0px_0px_#000]">
+                        <span class="font-pixel-heading text-xs md:text-sm text-yellow-300 leading-relaxed">${q.statement}</span>
+                    </div>
+
+                    <div class="flex justify-center space-x-4">
+                        <button onclick="checkTrueFalseAnswer(true)" class="bg-green-600 hover:bg-green-500 text-white font-pixel-heading text-xs px-6 py-3 border-2 border-black pixel-btn flex items-center space-x-2">
+                            <i class="fa-solid fa-check text-sm"></i>
+                            <span>TRUE</span>
+                        </button>
+                        <button onclick="checkTrueFalseAnswer(false)" class="bg-red-600 hover:bg-red-500 text-white font-pixel-heading text-xs px-6 py-3 border-2 border-black pixel-btn flex items-center space-x-2">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                            <span>FALSE</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function checkTrueFalseAnswer(userChoice) {
+            if (isAnswered) return;
+            isAnswered = true;
+
+            const q = activeQueue[currentIndex];
+            if (userChoice === q.isTrue) {
+                handleSuccess(q.isTrue ? 'CORRECT! Statement is TRUE!' : 'CORRECT! Statement is FALSE!', q.explanation);
+            } else {
+                handleFailure(q.isTrue ? 'WRONG! The statement is actually TRUE.' : 'WRONG! The statement is actually FALSE.', q.explanation);
+            }
+        }
+
+        function renderSpotter(q, container) {
+            let html = `
+                <div class="text-center animate-pixel-pop">
+                    <p class="text-[10px] font-pixel-heading text-yellow-300 uppercase mb-2"><i class="fa-solid fa-crosshair mr-1"></i> ${q.badge}</p>
+                    <p class="text-xs text-amber-200 mb-5 leading-relaxed">${q.instruction}</p>
+                    <div class="flex flex-wrap justify-center gap-2 md:gap-3 my-3">
+            `;
+
+            q.sentenceWords.forEach((word, idx) => {
+                html += `
+                    <button onclick="checkSpotterAnswer(${idx})" id="word-btn-${idx}" 
+                            class="text-xs md:text-sm font-pixel-heading bg-purple-900 border-2 border-amber-400 text-yellow-300 px-3 py-2.5 pixel-btn hover:bg-purple-800">
+                        ${word}
+                    </button>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function checkSpotterAnswer(clickedIdx) {
+            if (isAnswered) return;
+            isAnswered = true;
+
+            const q = activeQueue[currentIndex];
+            const isCorrect = (clickedIdx === q.wrongIndex);
+
+            q.sentenceWords.forEach((_, idx) => {
+                const btn = document.getElementById(`word-btn-${idx}`);
+                btn.disabled = true;
+                if (idx === q.wrongIndex) {
+                    btn.classList.remove('bg-purple-900', 'border-amber-400');
+                    btn.classList.add('bg-red-600', 'text-white', 'border-black', 'line-through');
+                }
+            });
+
+            if (isCorrect) {
+                handleSuccess(`Spot on! Correction: <strong class="underline">${q.correctReplacement}</strong>.`, q.explanation);
+            } else {
+                handleFailure(`Glitch hit! Tapped the wrong word.`, q.explanation);
+            }
+        }
+
+        function renderBuilder(q, container) {
+            selectedChips = [];
+            let html = `
+                <div class="text-center animate-pixel-pop">
+                    <p class="text-[10px] font-pixel-heading text-yellow-300 uppercase mb-2"><i class="fa-solid fa-cubes mr-1"></i> ${q.badge}</p>
+                    <p class="text-xs text-amber-200 mb-3 leading-relaxed">${q.instruction}</p>
+                    
+                    <div id="builder-answer-zone" class="min-h-[50px] p-2.5 bg-black/80 border-2 border-dashed border-amber-400 flex flex-wrap gap-2 items-center justify-center mb-4">
+                        <span id="placeholder-text" class="text-amber-500 text-[10px] italic">TAP WORD BLOCKS BELOW...</span>
+                    </div>
+
+                    <div id="chip-pool" class="flex flex-wrap justify-center gap-2">
+            `;
+
+            const shuffledChips = [...q.scrambled].sort(() => 0.5 - Math.random());
+            shuffledChips.forEach((chipText) => {
+                html += `
+                    <button onclick="toggleChip(this, '${chipText.replace(/'/g, "\\'")}')" class="chip-btn bg-amber-500 hover:bg-yellow-400 text-black font-pixel-heading px-3 py-2 border-2 border-black pixel-btn text-xs">
+                        ${chipText}
+                    </button>
+                `;
+            });
+
+            html += `
+                    </div>
+                    <div class="mt-4">
+                        <button onclick="checkBuilderAnswer()" class="bg-purple-800 hover:bg-purple-700 text-yellow-300 font-pixel-heading text-xs px-6 py-2.5 border-2 border-black pixel-btn">
+                            VERIFY COMBO
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function toggleChip(btn, text) {
+            if (isAnswered) return;
+            AudioFX.playWaffle();
+
+            const zone = document.getElementById('builder-answer-zone');
+            const placeholder = document.getElementById('placeholder-text');
+
+            if (btn.classList.contains('opacity-30')) {
+                btn.classList.remove('opacity-30', 'pointer-events-none');
+                selectedChips = selectedChips.filter(c => c !== text);
+            } else {
+                btn.classList.add('opacity-30', 'pointer-events-none');
+                selectedChips.push(text);
+            }
+
+            if (placeholder) placeholder.style.display = selectedChips.length === 0 ? 'inline' : 'none';
+
+            zone.innerHTML = selectedChips.map(c => `
+                <span class="bg-amber-400 text-black font-pixel-heading px-2 py-1 border border-black text-[10px] animate-pixel-pop">
+                    ${c}
+                </span>
+            `).join('');
+        }
+
+        function checkBuilderAnswer() {
+            if (isAnswered) return;
+            isAnswered = true;
+
+            const q = activeQueue[currentIndex];
+            const builtSentence = selectedChips.join(' ');
+            const isCorrect = (builtSentence === q.targetSentence);
+
+            if (isCorrect) {
+                handleSuccess('FLAWLESS COMBO!', q.explanation);
+            } else {
+                handleFailure(`COMBO BROKEN! Target: "${q.targetSentence}"`, q.explanation);
+            }
+        }
+
+        function renderSorter(q, container) {
+            let html = `
+                <div class="text-center animate-pixel-pop">
+                    <p class="text-[10px] font-pixel-heading text-yellow-300 uppercase mb-2"><i class="fa-solid fa-bolt mr-1"></i> ${q.badge}</p>
+                    <p class="text-xs text-amber-200 mb-3">Classify this expression:</p>
+                    
+                    <div class="my-5 p-5 bg-black border-4 border-amber-400 max-w-sm mx-auto shadow-[4px_4px_0px_0px_#000]">
+                        <span class="font-pixel-heading text-xs md:text-sm text-yellow-300">${q.expression}</span>
+                    </div>
+
+                    <div class="flex justify-center space-x-3">
+                        <button onclick="checkSorterAnswer(true)" class="bg-green-600 hover:bg-green-500 text-white font-pixel-heading text-xs px-5 py-2.5 border-2 border-black pixel-btn">
+                            <i class="fa-solid fa-check mr-1"></i> VALID
+                        </button>
+                        <button onclick="checkSorterAnswer(false)" class="bg-red-600 hover:bg-red-500 text-white font-pixel-heading text-xs px-5 py-2.5 border-2 border-black pixel-btn">
+                            <i class="fa-solid fa-xmark mr-1"></i> GLITCH!
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function checkSorterAnswer(userChoice) {
+            if (isAnswered) return;
+            isAnswered = true;
+
+            const q = activeQueue[currentIndex];
+            if (userChoice === q.isValid) {
+                handleSuccess(q.isValid ? 'Correct! Standard English expression.' : 'Great spot! That is a past time grammar glitch.', q.explanation);
+            } else {
+                handleFailure('Wrong classification!', q.explanation);
+            }
+        }
+
+        function renderBlank(q, container) {
+            let html = `
+                <div class="text-center animate-pixel-pop">
+                    <p class="text-[10px] font-pixel-heading text-yellow-300 uppercase mb-2"><i class="fa-solid fa-pen mr-1"></i> ${q.badge}</p>
+                    <p class="text-xs md:text-sm font-bold text-amber-100 my-5 max-w-md mx-auto leading-relaxed bg-black/60 p-4 border-2 border-amber-400">
+                        ${q.sentence}
+                    </p>
+                    <div class="grid grid-cols-2 gap-3 max-w-xs mx-auto">
+            `;
+
+            q.options.forEach(opt => {
+                html += `
+                    <button onclick="checkBlankAnswer('${opt}')" class="bg-purple-900 hover:bg-purple-800 text-yellow-300 font-pixel-heading text-xs py-2.5 border-2 border-amber-400 pixel-btn">
+                        ${opt}
+                    </button>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function checkBlankAnswer(selectedOpt) {
+            if (isAnswered) return;
+            isAnswered = true;
+
+            const q = activeQueue[currentIndex];
+            if (selectedOpt === q.correct) {
+                handleSuccess(`Spot on! "${selectedOpt}" fits perfectly.`, q.explanation);
+            } else {
+                handleFailure(`Incorrect choice. Correct word was "${q.correct}".`, q.explanation);
+            }
+        }
+
+        function handleSuccess(msg, explanation) {
+            AudioFX.playCorrect();
+            
+            score += 150;
+            streakCount = Math.min(3, streakCount + 1);
+            waffles = Math.min(MAX_WAFFLES, Math.floor((waffles + 100) / 10) * 10);
+            updateHeaderUI();
+
+            if (streakCount >= 3) {
+                showFeedback(true, '⚡ 3-STREAK COMPLETE! 3D RUNNER UNLOCKED! 🧇', `${msg} <br><span class="opacity-90">${explanation}</span>`);
+                document.getElementById('runner-ready-banner').classList.remove('hidden');
+                AudioFX.playSiren();
+                setTimeout(() => {
+                    if (!document.getElementById('game-screen').classList.contains('hidden')) {
+                        streakCount = 0;
+                        currentIndex++;
+                        launchRunnerGame();
+                    }
+                }, 1200);
+            } else {
+                showFeedback(true, `⚡ CORRECT! (${streakCount}/3 STREAK)`, `${msg} <br><span class="opacity-90">${explanation}</span>`);
+            }
+        }
+
+        function handleFailure(msg, explanation) {
+            AudioFX.playWrong();
+
+            streakCount = 0;
+            updateHeaderUI();
+
+            const gameBox = document.getElementById('game-screen');
+            gameBox.classList.add('animate-pixel-shake');
+            setTimeout(() => gameBox.classList.remove('animate-pixel-shake'), 300);
+
+            showFeedback(false, 'GLITCH HIT! STREAK RESET ⚡', `${msg} <br><span class="opacity-90">${explanation}</span>`);
+        }
+
+        function showFeedback(isSuccess, title, htmlText) {
+            const banner = document.getElementById('feedback-banner');
+            const icon = document.getElementById('feedback-icon');
+            const titleEl = document.getElementById('feedback-title');
+            const textEl = document.getElementById('feedback-text');
+
+            banner.classList.remove('hidden', 'bg-green-950', 'border-green-400', 'text-green-200', 'bg-red-950', 'border-red-500', 'text-red-200');
+
+            if (isSuccess) {
+                banner.classList.add('bg-green-950', 'border-green-400', 'text-green-200');
+                icon.innerHTML = '🧇✨';
+            } else {
+                banner.classList.add('bg-red-950', 'border-red-500', 'text-red-200');
+                icon.innerHTML = '🔥❌';
+            }
+
+            titleEl.innerText = title;
+            textEl.innerHTML = htmlText;
+            banner.classList.remove('hidden');
+        }
+
+        function nextQuestion() {
+            currentIndex++;
+            if (currentIndex >= activeQueue.length) {
+                showEndGame(true);
+            } else {
+                renderCurrentQuestion();
+            }
+        }
+
+        // =========================================================
+        // THREE.JS 3D GROUND POV ENDLESS RUNNER ENGINE
+        // =========================================================
+        let runner3D = {
+            scene: null,
+            camera: null,
+            renderer: null,
+            playerMesh: null,
+            policeMesh: null,
+            roadMesh: null,
+            obstacles: [],
+            collectibles: [],
+            active: false,
+            animId: null,
+            lane: 1, // 0: Left (-3), 1: Center (0), 2: Right (+3)
+            laneX: [ -3, 0, 3 ],
+            currentX: 0,
+            targetX: 0,
+            y: 0,
+            jumping: false,
+            jumpVy: 0,
+            ducking: false,
+            duckTimer: 0,
+            policeDist: 120,
+            frameCount: 0,
+            speed: 0.6
+        };
+
+        function init3DScene() {
+            const container = document.getElementById('runner-canvas-container');
+            container.innerHTML = '<div id="runner-overlay" class="absolute inset-0 bg-black/85 hidden flex flex-col items-center justify-center p-4 text-center animate-pixel-pop z-20"><div id="runner-overlay-icon" class="text-5xl mb-2">🚨</div><h3 id="runner-overlay-title" class="font-pixel-heading text-sm text-pink-400 mb-1">OUT OF ENERGY!</h3><p id="runner-overlay-desc" class="text-xs text-amber-200 mb-4 max-w-xs">The Pixel Police caught up!</p><button onclick="returnToGrammarHub()" class="bg-amber-400 hover:bg-yellow-300 text-black font-pixel-heading text-xs px-6 py-2.5 border-2 border-black pixel-btn"><i class="fa-solid fa-brain mr-1"></i> BACK TO GRAMMAR HUB</button></div>';
+
+            const width = container.clientWidth || 480;
+            const height = container.clientHeight || 360;
+
+            runner3D.scene = new THREE.Scene();
+            runner3D.scene.background = new THREE.Color(0x230f38);
+            runner3D.scene.fog = new THREE.FogExp2(0x230f38, 0.025);
+
+            // GROUND POV CAMERA: Behind avatar at height = 2.5, looking forward down road
+            runner3D.camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 100);
+            runner3D.camera.position.set(0, 2.8, 6.5);
+            runner3D.camera.lookAt(0, 1.5, -20);
+
+            runner3D.renderer = new THREE.WebGLRenderer({ antialias: false });
+            runner3D.renderer.setSize(width, height);
+            runner3D.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(runner3D.renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            runner3D.scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffee55, 1.0);
+            dirLight.position.set(5, 12, 10);
+            runner3D.scene.add(dirLight);
+
+            // 3D Road
+            const roadGeo = new THREE.PlaneGeometry(12, 200);
+            const roadMat = new THREE.MeshBasicMaterial({ color: 0x3d1c5a });
+            runner3D.roadMesh = new THREE.Mesh(roadGeo, roadMat);
+            runner3D.roadMesh.rotation.x = -Math.PI / 2;
+            runner3D.roadMesh.position.z = -80;
+            runner3D.scene.add(runner3D.roadMesh);
+
+            // Track Borders
+            for (let side of [-4.8, 4.8]) {
+                const borderGeo = new THREE.BoxGeometry(0.4, 0.4, 200);
+                const borderMat = new THREE.MeshBasicMaterial({ color: 0xffe555 });
+                const border = new THREE.Mesh(borderGeo, borderMat);
+                border.position.set(side, 0.2, -80);
+                runner3D.scene.add(border);
+            }
+
+            // Create 3D Voxel Avatar Hero
+            create3DAvatarMesh();
+
+            // Create 3D Pixel Police Car behind
+            create3DPoliceMesh();
+        }
+
+        function create3DAvatarMesh() {
+            if (runner3D.playerMesh) runner3D.scene.remove(runner3D.playerMesh);
+
+            const avatarGroup = new THREE.Group();
+            const config = AVATARS[selectedAvatar];
+
+            // Body Voxel
+            const bodyGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+            const bodyMat = new THREE.MeshLambertMaterial({ color: config.color });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.6;
+            avatarGroup.add(body);
+
+            // Head / Ears
+            const earGeo = new THREE.BoxGeometry(0.35, 0.5, 0.35);
+            const earMat = new THREE.MeshLambertMaterial({ color: config.earColor });
+            
+            const earLeft = new THREE.Mesh(earGeo, earMat);
+            earLeft.position.set(-0.4, 1.4, 0);
+            avatarGroup.add(earLeft);
+
+            const earRight = new THREE.Mesh(earGeo, earMat);
+            earRight.position.set(0.4, 1.4, 0);
+            avatarGroup.add(earRight);
+
+            // Snout/Face
+            const snoutGeo = new THREE.BoxGeometry(0.5, 0.3, 0.3);
+            const snoutMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const snout = new THREE.Mesh(snoutGeo, snoutMat);
+            snout.position.set(0, 0.6, -0.65);
+            avatarGroup.add(snout);
+
+            avatarGroup.position.set(0, 0, 0);
+            runner3D.playerMesh = avatarGroup;
+            runner3D.scene.add(runner3D.playerMesh);
+        }
+
+        function create3DPoliceMesh() {
+            if (runner3D.policeMesh) runner3D.scene.remove(runner3D.policeMesh);
+
+            const carGroup = new THREE.Group();
+            const carBodyGeo = new THREE.BoxGeometry(2.2, 1.0, 3.2);
+            const carMat = new THREE.MeshLambertMaterial({ color: 0x111122 });
+            const body = new THREE.Mesh(carBodyGeo, carMat);
+            body.position.y = 0.5;
+            carGroup.add(body);
+
+            // Sirens
+            const sirenGeo = new THREE.BoxGeometry(0.4, 0.3, 0.4);
+            const sirenRed = new THREE.Mesh(sirenGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+            sirenRed.position.set(-0.5, 1.1, 0);
+            carGroup.add(sirenRed);
+
+            const sirenBlue = new THREE.Mesh(sirenGeo, new THREE.MeshBasicMaterial({ color: 0x0000ff }));
+            sirenBlue.position.set(0.5, 1.1, 0);
+            carGroup.add(sirenBlue);
+
+            carGroup.position.set(0, 0, 8); // Chasing right behind camera
+            runner3D.policeMesh = carGroup;
+            runner3D.scene.add(runner3D.policeMesh);
+        }
+
+        function launchRunnerGame() {
+            AudioFX.playWaffle();
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('runner-screen').classList.remove('hidden');
+
+            init3DScene();
+
+            runner3D.active = true;
+            runner3D.lane = 1;
+            runner3D.currentX = 0;
+            runner3D.targetX = 0;
+            runner3D.y = 0;
+            runner3D.jumping = false;
+            runner3D.ducking = false;
+            runner3D.obstacles = [];
+            runner3D.collectibles = [];
+            runner3D.policeDist = 120;
+            runner3D.frameCount = 0;
+
+            window.removeEventListener('keydown', handleRunnerKeys);
+            window.addEventListener('keydown', handleRunnerKeys);
+
+            if (runner3D.animId) cancelAnimationFrame(runner3D.animId);
+            runner3DLoop();
+        }
+
+        function handleRunnerKeys(e) {
+            if (!runner3D.active) return;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') handleRunnerInput('left');
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') handleRunnerInput('right');
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') handleRunnerInput('jump');
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') handleRunnerInput('duck');
+        }
+
+        function handleRunnerInput(action) {
+            if (!runner3D.active) return;
+
+            if (action === 'left' && runner3D.lane > 0) {
+                runner3D.lane--;
+                AudioFX.playWaffle();
+            } else if (action === 'right' && runner3D.lane < 2) {
+                runner3D.lane++;
+                AudioFX.playWaffle();
+            } else if (action === 'jump' && !runner3D.jumping) {
+                runner3D.jumping = true;
+                runner3D.jumpVy = 0.32;
+                AudioFX.playJump();
+            } else if (action === 'duck' && !runner3D.ducking) {
+                runner3D.ducking = true;
+                runner3D.duckTimer = 22;
+            }
+        }
+
+        function returnToGrammarHub() {
+            runner3D.active = false;
+            if (runner3D.animId) cancelAnimationFrame(runner3D.animId);
+            
+            streakCount = 0;
+            updateHeaderUI();
+
+            document.getElementById('runner-screen').classList.add('hidden');
+            if (currentIndex >= activeQueue.length) {
+                showEndGame(true);
+            } else {
+                document.getElementById('game-screen').classList.remove('hidden');
+                renderCurrentQuestion();
+            }
+        }
+
+        function spawn3DObstacle() {
+            const laneIndex = Math.floor(Math.random() * 3);
+            const posX = runner3D.laneX[laneIndex];
+            const types = ['cone', 'barrier', 'tape'];
+            const type = types[Math.floor(Math.random() * types.length)];
+
+            const group = new THREE.Group();
+            if (type === 'cone') {
+                const geo = new THREE.CylinderGeometry(0.2, 0.6, 1.2, 6);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+                group.add(new THREE.Mesh(geo, mat));
+                group.position.y = 0.6;
+            } else if (type === 'barrier') {
+                const geo = new THREE.BoxGeometry(1.8, 1.0, 0.4);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xaa2222 });
+                group.add(new THREE.Mesh(geo, mat));
+                group.position.y = 0.5;
+            } else { // tape
+                const geo = new THREE.BoxGeometry(2.4, 0.3, 0.2);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xffee00 });
+                group.add(new THREE.Mesh(geo, mat));
+                group.position.y = 1.6; // High floating tape (duck under!)
+            }
+
+            group.position.set(posX, group.position.y, -60);
+            runner3D.scene.add(group);
+            runner3D.obstacles.push({ mesh: group, lane: laneIndex, type: type, z: -60 });
+        }
+
+        function spawn3DCollectible() {
+            const laneIndex = Math.floor(Math.random() * 3);
+            const posX = runner3D.laneX[laneIndex];
+            const type = Math.random() > 0.3 ? 'waffle' : 'syrup';
+
+            const geo = type === 'waffle' ? new THREE.CylinderGeometry(0.6, 0.6, 0.2, 8) : new THREE.CylinderGeometry(0.3, 0.4, 0.8, 8);
+            const mat = new THREE.MeshBasicMaterial({ color: type === 'waffle' ? 0xffcc00 : 0xcc6600 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = Math.PI / 4;
+            mesh.position.set(posX, 0.8, -60);
+
+            runner3D.scene.add(mesh);
+            runner3D.collectibles.push({ mesh: mesh, lane: laneIndex, type: type, z: -60 });
+        }
+
+        function runner3DLoop() {
+            if (!runner3D.active) return;
+
+            runner3D.frameCount++;
+
+            // DRAIN ENERGY CONTINUOUSLY BY 10 (e.g. 1000, 990, 980 ... 50, 40, 30, 20, 10, 0)
+            if (runner3D.frameCount % 10 === 0) {
+                waffles = Math.max(0, waffles - 10);
+            }
+            updateHeaderUI();
+            document.getElementById('runner-energy-num').innerText = `${Math.floor(waffles)} / 1000`;
+            document.getElementById('police-dist-indicator').innerText = `${Math.floor(runner3D.policeDist)}m`;
+
+            // Check Busted or Energy Out
+            if (waffles <= 0 || runner3D.policeDist <= 10) {
+                runner3D.active = false;
+                waffles = 0;
+                updateHeaderUI();
+                AudioFX.playWrong();
+                document.getElementById('runner-overlay-title').innerText = waffles <= 0 ? "OUT OF ENERGY! (0 / 1000)" : "PIXEL POLICE BUSTED YOU!";
+                document.getElementById('runner-overlay-desc').innerText = waffles <= 0 ? "Your 3D avatar ran out of energy! Answer questions in the Grammar Hub to refuel!" : "The Pixel Police caught up! Answer 3 questions in a streak to power up!";
+                document.getElementById('runner-overlay').classList.remove('hidden');
+                return;
+            }
+
+            // Smooth Lane Transition
+            runner3D.targetX = runner3D.laneX[runner3D.lane];
+            runner3D.currentX += (runner3D.targetX - runner3D.currentX) * 0.25;
+
+            // Jump Physics
+            if (runner3D.jumping) {
+                runner3D.y += runner3D.jumpVy;
+                runner3D.jumpVy -= 0.022;
+                if (runner3D.y <= 0) {
+                    runner3D.y = 0;
+                    runner3D.jumping = false;
+                }
+            }
+
+            // Ducking Physics
+            if (runner3D.ducking) {
+                runner3D.duckTimer--;
+                if (runner3D.duckTimer <= 0) runner3D.ducking = false;
+            }
+
+            // Update Player Mesh Position
+            runner3D.playerMesh.position.x = runner3D.currentX;
+            runner3D.playerMesh.position.y = runner3D.y;
+            runner3D.playerMesh.scale.y = runner3D.ducking ? 0.5 : 1.0;
+
+            // Continuous Running Bobbing Motion
+            if (!runner3D.jumping) {
+                runner3D.playerMesh.rotation.z = Math.sin(runner3D.frameCount * 0.3) * 0.08;
+            }
+
+            // Dynamic Camera Tracking Ground POV Behind Hero
+            runner3D.camera.position.x = runner3D.currentX * 0.6;
+            runner3D.camera.lookAt(runner3D.currentX * 0.8, 1.2 + runner3D.y * 0.5, -20);
+
+            // Chasing Police Mesh
+            if (runner3D.policeDist < 120) runner3D.policeDist += 0.04;
+            runner3D.policeMesh.position.x = runner3D.currentX;
+            runner3D.policeMesh.position.z = 4.0 + (runner3D.policeDist < 60 ? (60 - runner3D.policeDist) * 0.1 : 0);
+
+            // Spawn Obstacles & Collectibles
+            if (runner3D.frameCount % 35 === 0) spawn3DObstacle();
+            if (runner3D.frameCount % 25 === 0) spawn3DCollectible();
+
+            // Update Collectibles
+            for (let i = runner3D.collectibles.length - 1; i >= 0; i--) {
+                const c = runner3D.collectibles[i];
+                c.z += runner3D.speed;
+                c.mesh.position.z = c.z;
+                c.mesh.rotation.y += 0.05;
+
+                // Collision
+                if (c.z > -1.0 && c.z < 1.5 && Math.abs(c.mesh.position.x - runner3D.currentX) < 1.2) {
+                    AudioFX.playWaffle();
+                    if (c.type === 'waffle') {
+                        waffles = Math.min(MAX_WAFFLES, waffles + 20);
+                        score += 30;
+                    } else {
+                        score += 80;
+                    }
+                    updateHeaderUI();
+                    runner3D.scene.remove(c.mesh);
+                    runner3D.collectibles.splice(i, 1);
+                } else if (c.z > 10) {
+                    runner3D.scene.remove(c.mesh);
+                    runner3D.collectibles.splice(i, 1);
+                }
+            }
+
+            // Update Obstacles
+            for (let i = runner3D.obstacles.length - 1; i >= 0; i--) {
+                const obs = runner3D.obstacles[i];
+                obs.z += runner3D.speed;
+                obs.mesh.position.z = obs.z;
+
+                const isHitX = Math.abs(obs.mesh.position.x - runner3D.currentX) < 1.2;
+                const isHitZ = obs.z > -1.0 && obs.z < 1.2;
+
+                let dodged = false;
+                if (obs.type === 'tape' && runner3D.ducking) dodged = true;
+                if ((obs.type === 'cone' || obs.type === 'barrier') && runner3D.y > 0.8) dodged = true;
+
+                if (isHitX && isHitZ && !dodged) {
+                    AudioFX.playWrong();
+                    runner3D.policeDist = Math.max(0, runner3D.policeDist - 35);
+                    waffles = Math.max(0, waffles - 30);
+                    runner3D.scene.remove(obs.mesh);
+                    runner3D.obstacles.splice(i, 1);
+                } else if (obs.z > 10) {
+                    runner3D.scene.remove(obs.mesh);
+                    runner3D.obstacles.splice(i, 1);
+                    score += 10;
+                }
+            }
+
+            runner3D.renderer.render(runner3D.scene, runner3D.camera);
+            runner3D.animId = requestAnimationFrame(runner3DLoop);
+        }
+
+        function showEndGame(completed) {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('runner-screen').classList.add('hidden');
+            const endScreen = document.getElementById('end-screen');
+            endScreen.classList.remove('hidden');
+
+            document.getElementById('final-score').innerText = score.toString().padStart(4, '0');
+            document.getElementById('final-waffles').innerText = Math.floor(waffles);
+
+            document.getElementById('trophy-icon').innerText = '🏆🧇';
+            document.getElementById('end-title').innerText = `VICTORY, ${playerName}!`;
+            document.getElementById('end-subtitle').innerText = 'High Score! You have mastered Simple Past time expressions in 3D!';
+        }
+    </script>
+</body>
+</html>
